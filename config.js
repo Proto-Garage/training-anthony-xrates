@@ -17,6 +17,16 @@ var config = {
         server: {
             poolSize: 5
         }
+    },
+    messages: {
+        error: {
+            invalid_base: "Base currency invalid.",
+            null_base: "Base currency can't be null.",
+            invalid_currency: "Currency invalid.",
+            null_currency: "Currency can't be null.",
+            null_values: "Values to convert can't be null.",
+            invalid_values: "Invalid values to convert."
+        }
     }
 }
 

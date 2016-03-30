@@ -11,51 +11,36 @@ var modelSchema = new schema({
 });
 
 //retrieve conversion rate
-modelSchema.statics.getConversionRate = function(from, to, date, cb){
-    return this.model('Conversion').findOne({ $or: [{from: from, to: to}, {from: to, to: from}], date: date}, cb);
+modelSchema.statics.getConversionRate = function(filter, findAll, cb){
+    findAll = findAll || false;
+    
+    if (findAll)
+        return this.model('Conversion').find(filter, cb);
+    
+    return this.model('Conversion').findOne(filter, cb);
 }
 
 var model = mongoose.model('Conversion', modelSchema);
 
-//modelSchema.pre('save', function(next){
-//    var me = this;
-//    
-//    //check if conversion rate already exist
-//    //model.find(
-//    //    {
-//    //        $or: [{
-//    //            from: this.from,
-//    //            to: this.to
-//    //        },
-//    //        {
-//    //            from: this.to,
-//    //            to: this.from
-//    //        }
-//    //        ],
-//    //        date: this.date
-//    //    },
-//    //    function(err, data){
-//    //        if (!data.length) {
-//    //            next();
-//    //        }
-//    //        else
-//    //            next(new Error("data already exist"));
-//    //});
-//    
-//    var cb = function(err, data){
-//        if (data) {
-//            if (!data.length) 
-//                next();
-//            else
-//                next(new Error("data already exist"));
-//        }
-//        else
-//        {
-//            console.log("no data found");
-//        }
-//    }
-//    
-//    me.getConversion(this.from, this.to, this.date, next);
-//});
+modelSchema.pre('save', function(next){
+    var me = this;
+    
+    var cb = function(err, data){
+        //has existing data
+        if(data)
+            next(new Error("Conversion from "+me.from+" to "+me.to+" already exist for this date"));
+        else
+            next();
+    }
+    
+    var filter = {
+        $or: [
+            {from: me.from, to: me.to},
+            {from: me.to, to: me.from}
+        ],
+        date: me.date
+    }
+    me.model('Conversion').getConversionRate(filter, false, cb);
+});
 
 module.exports = model;
