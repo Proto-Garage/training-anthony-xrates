@@ -40,6 +40,33 @@ customValidator.prototype.arrayOfNumbers = function(tip){
     
     return me;
 }
+
+//validate exchange rate object. should be {currency: rate}
+customValidator.prototype.validRateObject = function(tip){
+    var v = require('./node_modules/koa-validate/node_modules/validator');
+    var me = this;
+    
+    if(Object.hasOwnProperty(me.value)) {
+        for(var key in me.value)
+        {
+            //check currency
+            if(me.goOn && !v.isAlpha(key)){
+                me.goOn = false;
+                me.addError(tip || me.key + " Invalid currency.");
+            }
+            
+            //check currency rate
+            if (me.goOn && !v.isFloat(me.value[key])) {
+                me.goOn = false;
+                me.addError(tip || me.key + " Invalid currency rate.");
+            }
+        };
+    }
+    else
+        me.addError(tip || me.key + " Invalid currency rate.");
+    
+    return me;
+}
 /** end--custom validators **/
 
 ROUTER
@@ -112,23 +139,36 @@ ROUTER
             ,base = params.base
             ,rates = params.rates
             ,data
-            ,error_msg = [];        
+            ,error_msg = [];
+        
+        me.checkBody("base").notEmpty(CONFIG.messages.error.null_base).isAlpha(CONFIG.messages.error.invalid_base);
+        me.checkBody("rates").notEmpty("rate empty").validRateObject("invalid rate object");
+        
+        if (me.errors) {
+            me.body = me.errors;
+            me.status = 400;
+            
+            return;
+        }
+        
+        base = base.toUpperCase();
     
         for(var currency in rates)
         {
-            data = new CONVERSION({
-                from: base.toUpperCase(),
-                to: currency.toUpperCase(),
-                rate: rates[currency],
-                date: me.date
-            });
+            currency = currency.toUpperCase();
             
-            data.save(function(err, data){
-                if (err) error_msg.push(err.message);
-            });
+            //update if conversion rate already exist, but if not, then add new record
+            CONVERSION.update(
+                {from: base, to: currency, date: me.date},
+                {from: base, to: currency, rate: rates[currency], date: me.date},
+                {upsert: true, setDefaultsOnInsert: true},
+                function(err, data){
+                    if (err) return err;
+                }
+            );
         }
         
-        this.body = {errors: error_msg, msg: error_msg.length > 0 ? "OK but with errors" : "OK"};
+        this.body = "OK";
         this.status = 201;
     })
     .post('/convert', BODY, function *(next){
@@ -169,10 +209,6 @@ ROUTER
         };
 
         var filter = {
-            //$or: [
-            //    {from: params.base, to: params.currency},
-            //    {from: params.currency, to: params.base}
-            //],
             from: params.base,
             to: params.currency,
             date: this.date
