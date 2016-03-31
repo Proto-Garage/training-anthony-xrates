@@ -12,11 +12,15 @@
     "koa-mongoose": "^1.0.9",
     "koa-response-time": "^1.0.2",
     "koa-router": "^5.4.0",
-    "koa-validate": "^0.2.11"
+    "koa-validate": "^0.2.11",
+    "validator": "^5.1.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "mocha": "^2.4.5",
+    "unit.js": "^2.0.0"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha test"
   },
   "repository": {
     "type": "git",

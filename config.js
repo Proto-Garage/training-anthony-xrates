@@ -25,7 +25,9 @@ var config = {
             invalid_currency: "Currency invalid.",
             null_currency: "Currency can't be null.",
             null_values: "Values to convert can't be null.",
-            invalid_values: "Invalid values to convert."
+            invalid_values: "Invalid values to convert.",
+            null_rate: "Conversion rate is null.",
+            invalid_rate: "Invalid conversion rate."
         }
     }
 }

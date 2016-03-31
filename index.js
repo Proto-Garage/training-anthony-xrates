@@ -11,63 +11,7 @@ var KOA = require('koa')
     ,COMPRESSION = require('koa-compress')()
     ,APP = KOA();
 
-/**
- *custom validators
- */
-var customValidator= require('koa-validate').Validator;
-
-//validate if array not empty
-customValidator.prototype.arrayNotEmpty = function(tip){
-    if (this.goOn && this.value.length == 0) {
-        this.addError(tip || this.key + " is null.");
-    }
-    
-    return this;
-}
-
-//validate if array contains only numbers. note: dependent to koa-validate library
-customValidator.prototype.arrayOfNumbers = function(tip){
-    var v = require('./node_modules/koa-validate/node_modules/validator');
-    var me = this;
-    
-    for(var key in me.value)
-    {
-        if (me.goOn && !v.isFloat(me.value[key])) {
-            me.goOn = false;
-            me.addError(tip || me.key + " only numbers accepted.");
-        }
-    };
-    
-    return me;
-}
-
-//validate exchange rate object. should be {currency: rate}
-customValidator.prototype.validRateObject = function(tip){
-    var v = require('./node_modules/koa-validate/node_modules/validator');
-    var me = this;
-    
-    if(Object.hasOwnProperty(me.value)) {
-        for(var key in me.value)
-        {
-            //check currency
-            if(me.goOn && !v.isAlpha(key)){
-                me.goOn = false;
-                me.addError(tip || me.key + " Invalid currency.");
-            }
-            
-            //check currency rate
-            if (me.goOn && !v.isFloat(me.value[key])) {
-                me.goOn = false;
-                me.addError(tip || me.key + " Invalid currency rate.");
-            }
-        };
-    }
-    else
-        me.addError(tip || me.key + " Invalid currency rate.");
-    
-    return me;
-}
-/** end--custom validators **/
+require('./lib/customValidator');
 
 ROUTER
     .prefix('/rates/:date')
@@ -127,7 +71,7 @@ ROUTER
         if (rates.length > 0) {
             for(var key in rates)
             {
-                result.rates[value["to"]] = rates[key]["rate"];
+                result.rates[rates[key]["to"]] = rates[key]["rate"];
             };
         }
         
@@ -138,11 +82,11 @@ ROUTER
             ,params = me.request.body
             ,base = params.base
             ,rates = params.rates
-            ,data
+            ,data, currencyUpper
             ,error_msg = [];
         
         me.checkBody("base").notEmpty(CONFIG.messages.error.null_base).isAlpha(CONFIG.messages.error.invalid_base);
-        me.checkBody("rates").notEmpty("rate empty").validRateObject("invalid rate object");
+        me.checkBody("rates").notEmpty(CONFIG.messages.error.null_rate).validRateObject(CONFIG.messages.error.invalid_rate);
         
         if (me.errors) {
             me.body = me.errors;
@@ -155,12 +99,13 @@ ROUTER
     
         for(var currency in rates)
         {
-            currency = currency.toUpperCase();
+            currencyUpper = currency.toUpperCase();
             
             //update if conversion rate already exist, but if not, then add new record
+            console.log({from: base, to: currencyUpper, rate: rates[currency], date: me.date});
             CONVERSION.update(
-                {from: base, to: currency, date: me.date},
-                {from: base, to: currency, rate: rates[currency], date: me.date},
+                {from: base, to: currencyUpper, date: me.date},
+                {from: base, to: currencyUpper, rate: rates[currency], date: me.date},
                 {upsert: true, setDefaultsOnInsert: true},
                 function(err, data){
                     if (err) return err;
