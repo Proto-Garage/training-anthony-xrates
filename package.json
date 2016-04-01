@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "dependencies": {
+    "kcors": "^1.1.0",
     "koa": "^1.2.0",
     "koa-body": "^1.4.0",
     "koa-compress": "^1.0.9",

@@ -9,6 +9,7 @@ var KOA = require('koa')
     ,RT = require('koa-response-time')()
     ,VALIDATOR = require('koa-validate')()
     ,COMPRESSION = require('koa-compress')()
+    ,CORS = require('kcors')()
     ,APP = KOA();
 
 require('./lib/customValidator');
@@ -102,7 +103,6 @@ ROUTER
             currencyUpper = currency.toUpperCase();
             
             //update if conversion rate already exist, but if not, then add new record
-            console.log({from: base, to: currencyUpper, rate: rates[currency], date: me.date});
             CONVERSION.update(
                 {from: base, to: currencyUpper, date: me.date},
                 {from: base, to: currencyUpper, rate: rates[currency], date: me.date},
@@ -170,7 +170,8 @@ ROUTER
 
 APP
     .use(COMPRESSION)
-    .use(RT)    
+    .use(RT)
+    .use(CORS)
     .use(CONFIG.generateConnection())
     .use(JSON)
     .use(VALIDATOR)
