@@ -14,6 +14,7 @@
     "koa-response-time": "^1.0.2",
     "koa-router": "^5.4.0",
     "koa-validate": "^0.2.11",
+    "q": "^1.4.1",
     "validator": "^5.1.0"
   },
   "devDependencies": {
