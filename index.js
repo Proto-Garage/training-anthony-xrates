@@ -65,7 +65,6 @@ ROUTER
             rates: {}
         }
         
-        var getRate = Q.nbind(CONVERSION.getConversionRate, CONVERSION);
         var formatResult = function(data){
             var result = {};
             
@@ -84,7 +83,9 @@ ROUTER
             me.body = result;
         };
         
-        yield getRate(filter, findAll).then(formatResult).then(returnResponse);
+        var getConversion = CONVERSION.getConversionRate(filter, findAll).exec();
+        
+        yield getConversion.then(formatResult).then(returnResponse);
     })
     .put('/', BODY, function *(next){
         var me = this
@@ -105,18 +106,55 @@ ROUTER
         
         base = base.toUpperCase();
         
+        //var doUpdate = function(rates){
+        //    //first thing to do is update/insert records and wait for it to finish
+        //    //second is to return after all db update operation is done
+        //    var deferred = Q.defer()
+        //        ,updateQ = Q.nbind(CONVERSION.update, CONVERSION)
+        //        ,currencyUpper
+        //        ,ratesCount = 0
+        //        ,updateCount = 0;
+        //    
+        //    //function to check whether all records are insert/updated
+        //    //var doneUpdate = function(){
+        //    //    if (ratesCount == updateCount)
+        //    //        deferred.resolve('done upserting all records');
+        //    //}
+        //    
+        //    //loop to each conversion rate
+        //    for(var currency in rates)
+        //    {
+        //        ratesCount++;
+        //        currencyUpper = currency.toUpperCase();            
+        //        
+        //        //run update for records asynchronously
+        //        //updateQ(
+        //        //    {from: base, to: currencyUpper, date: me.date},
+        //        //    {from: base, to: currencyUpper, rate: rates[currency], date: me.date},
+        //        //    {upsert: true, setDefaultsOnInsert: true}//set option to insert if record does not exist
+        //        //).done(function(){
+        //        //    updateCount++;
+        //        //    
+        //        //    doneUpdate();
+        //        //});
+        //    }
+        //    
+        //    return deferred.promise;
+        //};
+        
         var doUpdate = function(rates){
             //first thing to do is update/insert records and wait for it to finish
             //second is to return after all db update operation is done
             var deferred = Q.defer()
-                ,updateQ = Q.nbind(CONVERSION.update, CONVERSION)
                 ,currencyUpper
                 ,ratesCount = 0
                 ,updateCount = 0;
             
             //function to check whether all records are insert/updated
             var doneUpdate = function(){
-                if (ratesCount == updateCount)
+                updateCount++;
+                
+                if (updateCount >= ratesCount)
                     deferred.resolve('done upserting all records');
             }
             
@@ -126,16 +164,11 @@ ROUTER
                 ratesCount++;
                 currencyUpper = currency.toUpperCase();            
                 
-                //run update for records asynchronously
-                updateQ(
+                CONVERSION.update(
                     {from: base, to: currencyUpper, date: me.date},
                     {from: base, to: currencyUpper, rate: rates[currency], date: me.date},
                     {upsert: true, setDefaultsOnInsert: true}//set option to insert if record does not exist
-                ).done(function(){
-                    updateCount++;
-                    
-                    doneUpdate();
-                });
+                ).exec().then(doneUpdate);
             }
             
             return deferred.promise;
@@ -153,8 +186,7 @@ ROUTER
             ,params = me.request.body
             ,values = params.values
             ,conversion_rate
-            ,findAll = false
-            ,doConversion;
+            ,findAll = false;
             
         me.checkBody('base').notEmpty(CONFIG.messages.error.null_base).isAlpha(CONFIG.messages.error.invalid_base);
         me.checkBody('currency').notEmpty(CONFIG.messages.error.null_currency).isAlpha(CONFIG.messages.error.invalid_currency);
@@ -175,7 +207,7 @@ ROUTER
             date: me.date
         }
         
-        doConversion = function(data){
+        var doConversion = function(data){
             var rate = 0
                 ,converted_values = []
                 ,convert = function(rate, value){
@@ -194,7 +226,7 @@ ROUTER
             return converted_values;
         };
         
-        var getConversionRate = Q.nbind(CONVERSION.getConversionRate, CONVERSION);
+        var getConversionRate = CONVERSION.getConversionRate(filter, findAll).exec();
         var returnResponse = function(data){
             me.body = {
                 base: params.base,
@@ -203,7 +235,7 @@ ROUTER
             }
         }
         
-        yield getConversionRate(filter, findAll).then(doConversion).then(returnResponse);
+        yield getConversionRate.then(doConversion).then(returnResponse);
     });
 
 APP
