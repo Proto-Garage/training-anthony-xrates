@@ -1,6 +1,6 @@
 'use strict';
 
-var KOA = require('koa')
+let KOA = require('koa')
     ,ROUTER = require('koa-router')()
     ,BODY = require('koa-body')()
     ,CONFIG = require('./config')
@@ -32,7 +32,7 @@ ROUTER
         yield next;
     })
     .get('/', function *(next){
-        var me = this
+        let me = this
             ,query = me.query
             ,date = me.date
             ,rates
@@ -65,35 +65,23 @@ ROUTER
             rates: {}
         }
         
-        var formatResult = function(data){
-            var result = {};
+        let conversion = yield CONVERSION.getConversionRate(filter, findAll).exec();
+        
+        if (conversion.length > 0) {
+            let key;
             
-            if (data.length > 0) {
-                for(var key in data)
-                {
-                    result[data[key]["to"]] = data[key]["rate"];
-                };
+            for(key in conversion) {
+                result.rates[ conversion[key]['to'] ] = conversion[key]['rate'];
             }
-            
-            return result;
         }
         
-        var returnResponse = function(data){
-            result.rates = data;
-            me.body = result;
-        };
-        
-        var getConversion = CONVERSION.getConversionRate(filter, findAll).exec();
-        
-        yield getConversion.then(formatResult).then(returnResponse);
+        me.body = result;
     })
     .put('/', BODY, function *(next){
-        var me = this
+        let me = this
             ,params = me.request.body
             ,base = params.base
-            ,rates = params.rates
-            ,error_msg = []
-            ,data;
+            ,rates = params.rates;
         
         me.checkBody("base").notEmpty(CONFIG.messages.error.null_base).isAlpha(CONFIG.messages.error.invalid_base);
         me.checkBody("rates").notEmpty(CONFIG.messages.error.null_rate).validRateObject(CONFIG.messages.error.invalid_rate);
@@ -106,88 +94,39 @@ ROUTER
         
         base = base.toUpperCase();
         
-        //var doUpdate = function(rates){
-        //    //first thing to do is update/insert records and wait for it to finish
-        //    //second is to return after all db update operation is done
-        //    var deferred = Q.defer()
-        //        ,updateQ = Q.nbind(CONVERSION.update, CONVERSION)
-        //        ,currencyUpper
-        //        ,ratesCount = 0
-        //        ,updateCount = 0;
-        //    
-        //    //function to check whether all records are insert/updated
-        //    //var doneUpdate = function(){
-        //    //    if (ratesCount == updateCount)
-        //    //        deferred.resolve('done upserting all records');
-        //    //}
-        //    
-        //    //loop to each conversion rate
-        //    for(var currency in rates)
-        //    {
-        //        ratesCount++;
-        //        currencyUpper = currency.toUpperCase();            
-        //        
-        //        //run update for records asynchronously
-        //        //updateQ(
-        //        //    {from: base, to: currencyUpper, date: me.date},
-        //        //    {from: base, to: currencyUpper, rate: rates[currency], date: me.date},
-        //        //    {upsert: true, setDefaultsOnInsert: true}//set option to insert if record does not exist
-        //        //).done(function(){
-        //        //    updateCount++;
-        //        //    
-        //        //    doneUpdate();
-        //        //});
-        //    }
-        //    
-        //    return deferred.promise;
-        //};
-        
-        var doUpdate = function(rates){
-            //first thing to do is update/insert records and wait for it to finish
-            //second is to return after all db update operation is done
-            var deferred = Q.defer()
-                ,currencyUpper
-                ,ratesCount = 0
-                ,updateCount = 0;
-            
-            //function to check whether all records are insert/updated
-            var doneUpdate = function(){
-                updateCount++;
-                
-                if (updateCount >= ratesCount)
-                    deferred.resolve('done upserting all records');
-            }
+        let doUpdate = function(rates){
+            let currency, data = []
+                ,currencyUpper;
             
             //loop to each conversion rate
-            for(var currency in rates)
+            for(currency in rates)
             {
-                ratesCount++;
-                currencyUpper = currency.toUpperCase();            
+                currencyUpper = currency.toUpperCase();
                 
-                CONVERSION.update(
-                    {from: base, to: currencyUpper, date: me.date},
-                    {from: base, to: currencyUpper, rate: rates[currency], date: me.date},
-                    {upsert: true, setDefaultsOnInsert: true}//set option to insert if record does not exist
-                ).exec().then(doneUpdate);
+                data.push(
+                    CONVERSION.update(
+                        {from: base, to: currencyUpper, date: me.date},
+                        {from: base, to: currencyUpper, rate: rates[currency], date: me.date},
+                        {upsert: true, setDefaultsOnInsert: true}//set option to insert if record does not exist
+                    ).exec()
+                )
             }
             
-            return deferred.promise;
+            return data;
         };
         
-        var returnResponse = function(data){
-            me.body = "OK";
-            me.status = 201;
-        }
+        yield Q.all(doUpdate(rates));
         
-        yield doUpdate(rates).then(returnResponse);
+        me.body = "OK";
+        me.status = 201;
     })
     .post('/convert', BODY, function *(next){
-        var me = this
+        let me = this
             ,params = me.request.body
-            ,values = params.values
+            ,valuesToConvert = params.values
             ,conversion_rate
             ,findAll = false;
-            
+        
         me.checkBody('base').notEmpty(CONFIG.messages.error.null_base).isAlpha(CONFIG.messages.error.invalid_base);
         me.checkBody('currency').notEmpty(CONFIG.messages.error.null_currency).isAlpha(CONFIG.messages.error.invalid_currency);
         me.checkBody('values').notEmpty(CONFIG.messages.error.null_values).arrayNotEmpty(CONFIG.messages.error.null_values).arrayOfNumbers(CONFIG.messages.error.invalid_values);
@@ -201,14 +140,18 @@ ROUTER
         params.base = params.base.toUpperCase();
         params.currency = params.currency.toUpperCase();
 
-        var filter = {
+        let filter = {
             from: params.base,
             to: params.currency,
             date: me.date
         }
         
-        var doConversion = function(data){
-            var rate = 0
+        let rates = yield CONVERSION.getConversionRate(filter, findAll).exec();
+        
+        //util function for conversion
+        let doConversion = function(data, values){
+            let rate = 0
+                ,key
                 ,converted_values = []
                 ,convert = function(rate, value){
                     return rate * value;
@@ -218,24 +161,21 @@ ROUTER
             if (data) rate = data.rate;
             
             //convert values passed
-            for(var key in values)
+            for(key in values)
             {
-                converted_values.push(convert(rate, values[key]));
+                converted_values.push( convert(rate, values[key]) );
             }
             
             return converted_values;
         };
         
-        var getConversionRate = CONVERSION.getConversionRate(filter, findAll).exec();
-        var returnResponse = function(data){
-            me.body = {
-                base: params.base,
-                currency: params.currency,
-                values: data
-            }
-        }
+        let convertedValues = doConversion(rates, valuesToConvert);
         
-        yield getConversionRate.then(doConversion).then(returnResponse);
+        me.body = {
+            base: params.base,
+            currency: params.currency,
+            values: convertedValues
+        }
     });
 
 APP
